@@ -31,10 +31,15 @@ set GEMINI_API_KEY=tu_api_key
 python main.py
 ```
 
-Los resultados se guardan en `notebooklm_output/` con extension `.notebooklm.md`.
-Los textos recortados se guardan en `notebooklm_output/_clean/`.
-Si un archivo no cabe en un request, se divide en partes con sufijo `.parte_XX`.
+Los resultados se guardan en `notebooklm_output/` con extension `.md`.
+Los textos recortados (por clase) se guardan en `notebooklm_output/_clean/`.
+Si una clase no cabe en un request, se divide en partes con sufijo `.parte_XX`.
 
 ## Modelo
 
 El modelo por defecto es `gemini-2.5-flash` y puede editarse en `main.py`.
+
+## Agrupacion de clases
+
+Los archivos con patron `Nombre Clase_2-1.txt`, `Nombre Clase_2-2.txt` se agrupan
+como una sola clase `Nombre Clase_2` antes del procesamiento.
