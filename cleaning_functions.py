@@ -1,11 +1,24 @@
-import re # Regular expressions library
+"""Module for cleaning and normalizing transcript text.
 
-# Regular expression pattern to match timestamps in format HH:MM:SS.mmm
+Removes timestamps, user identifiers, greetings, and filler words from transcripts
+to extract only the meaningful content for documentation generation.
+"""
+import re
+
+# Regular expression to match HH:MM:SS.mmm timestamps that should be skipped
 TIMESTAMP_REGEX = re.compile(r"\b\d{1,2}:\d{2}:\d{2}\.\d{1,3}")
+
+# Regular expression pattern to match user identifiers (UUID format with user ID)
+# Used to skip lines containing user information that aren't part of the transcript content
 USER_REGEX = re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/[0-9]{1,5}-[0-9]")
+
+# Regular expression pattern to match empty lines (only newline characters)
+# Used to skip blank lines during transcript cleaning
 LINE_BREAK = re.compile(r'^\n$')
 
 # Set of phrases to be completely removed from the transcript
+# Includes greetings, farewells, polite formalities, and WebVTT headers
+# that don't contribute meaningful content to the cleaned transcript
 REMOVAL_PHRASES = {
     "webvtt",
     "hola",
@@ -41,7 +54,8 @@ REMOVAL_PHRASES = {
     "sesión del día"
 }
 
-# Set of filler words (like 'uh', 'um', 'well') that should be removed from the transcript
+# Set of filler words and interjections (like 'uh', 'um', 'well')
+# These common utterances don't add semantic value and should be removed
 FILLER_PHRASES = {
     "eh",
     "em",
@@ -53,35 +67,57 @@ FILLER_PHRASES = {
     "este",
 }
 
-# Normalizes text for matching: converts to lowercase, removes punctuation, and normalizes whitespace
-# This allows for reliable comparison against phrase sets regardless of formatting
+
 def normalize_for_match(text):
+    """Normalizes text for matching by converting case, removing punctuation, and normalizing whitespace.
+    
+    Processes text to make it suitable for reliable comparison against phrase sets regardless
+    of original formatting, capitalization, or punctuation.
+    
+    Args:
+        text (str): The input text to normalize
+    
+    Returns:
+        str: Normalized text with lowercase conversion, punctuation removed, and whitespace normalized
+    """
     text = text.strip().lower()
-    text = re.sub(r"[^\w\s]", "", text) # Remove all punctuation and special characters, keeping only word characters and spaces
-    text = re.sub(r"\s+", " ", text) # Replace multiple consecutive spaces with a single space
+    # Remove all punctuation and special characters, keeping only word characters and spaces
+    text = re.sub(r"[^\w\s]", "", text)
+    # Replace multiple consecutive spaces with a single space
+    text = re.sub(r"\s+", " ", text)
     return text.strip()
 
-# Cleans a transcript by removing timestamps, greeting phrases, and filler words
-# Returns a cleaned version with only the meaningful content
+
 def clean_transcript(text):
+    """Cleans a transcript by removing timestamps, metadata, greetings, and filler words.
+    
+    Processes raw transcript to extract only meaningful content by removing:
+    - Timestamp lines (metadata)
+    - User identifier lines (metadata)
+    - Empty lines
+    - Greeting and farewell phrases
+    - Common filler words
+    
+    Args:
+        text (str): The raw transcript text containing timestamps and metadata
+    
+    Returns:
+        str: Cleaned transcript with only substantive content
+    """
     lines = []
     for raw_line in text.splitlines():
         line = raw_line.strip()
-        # Skip lines that contain a timestamp, user identifier or lines that have no content
+        # Skip lines that contain timestamps, user identifiers, or are completely empty
+        # These are metadata and formatting artifacts, not actual content
         if TIMESTAMP_REGEX.search(line) or USER_REGEX.search(line) or re.match(r'^\s*$', line):
             continue
 
-        # if re.match(r'^\s*$', line):
-        #     print("salto linea")
-        #     continue
-
         normalized = normalize_for_match(line)
         # Skip removal phrases (greetings, farewells, polite phrases)
-        # if normalized in REMOVAL_PHRASES:
-        #     continue
+        # Checks if any removal phrase is contained in the normalized line
         if any(phrase in normalized for phrase in REMOVAL_PHRASES):
             continue
-        # # Skip filler phrases (utterances like 'uh', 'um', 'well')
+        
         # if normalized in FILLER_PHRASES:
         #     continue
 
