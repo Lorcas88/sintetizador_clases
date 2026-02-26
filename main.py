@@ -8,10 +8,9 @@ import os
 
 from dotenv import load_dotenv
 from google import genai
-
-from functions import generate_batch
-from file_functions import collect_transcript_files, group_class_files
-from batch_functions import build_class_items, build_batches, write_batch_outputs
+from api import generate_batch
+from file_functions import delete_folder_content, collect_transcript_files, group_class_files
+from batching import build_class_items, build_batches, write_batch_outputs
 from rate_limiter import GeminiRateLimiter
 
 # Load environment variables from .env file for API credentials
@@ -36,18 +35,23 @@ def main():
             "Missing GEMINI_API_KEY environment variable. "
             "Set it or create a .env and load it before running."
         )
-
     os.environ["GOOGLE_API_KEY"] = api_key
 
-    # Initialize Gemini API client with credentials
+    # Initialize the folders environment
     input_dir = INPUT_FOLDER
     output_dir = OUTPUT_FOLDER
     os.makedirs(input_dir, exist_ok=True)
+    merge_dir = os.path.join(input_dir, "_merge")
+    os.makedirs(merge_dir, exist_ok=True)
     os.makedirs(output_dir, exist_ok=True)
     clean_dir = os.path.join(output_dir, "_clean")
     os.makedirs(clean_dir, exist_ok=True)
 
-    # Initialize API client and rate limiter
+    # Remove files in this folders to avoid reprocess files
+    delete_folder_content(merge_dir)
+    delete_folder_content(clean_dir)
+    
+    # Initialize API client and an instance of the rate limiter
     client = genai.Client()
     limiter = GeminiRateLimiter(
         requests_per_minute=5,
@@ -62,10 +66,12 @@ def main():
             f"No transcript files found in {input_dir}. "
             "Add .txt or .md files and retry."
         )
-
+    
     # Group files by class and process them
-    grouped = group_class_files(all_files)
-    class_items = build_class_items(client, DEFAULT_MODEL, grouped, clean_dir)
+    grouped : dict = group_class_files(all_files)
+    
+    class_items = build_class_items(client, DEFAULT_MODEL, grouped, merge_dir, clean_dir)
+    return
     if not class_items:
         raise SystemExit("No usable content found after cleaning.")
 

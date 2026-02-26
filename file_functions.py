@@ -1,8 +1,4 @@
-"""Module for merging multi-part class transcripts into complete documents.
-
-Handles grouping class files by their base name and part numbers, then merging
-all parts of a class back into a single coherent transcript.
-"""
+"""File handling utilities for transcript discovery, grouping, and merging."""
 import os
 import re
 
@@ -13,11 +9,15 @@ CLASS_PART_REGEX = re.compile(r"(.*)_([0-9]+)-([0-9]+)")
 # Supported file extensions for transcript files
 SUPPORTED_SUFFIXES = (".txt", ".md")
 
+def delete_folder_content(dir):
+    for _, _, files in os.walk(dir):
+        if files:
+            for file in files: 
+                filepath = os.path.join(dir, file)
+                os.remove(filepath)
+
 def collect_transcript_files(folder):
-    """Recursively collect transcript files under `folder`.
-    
-    Returns a sorted list of paths for deterministic processing.
-    """
+    """Recursively collect transcript files; return sorted list for deterministic processing."""
     files = []
     for root, _, names in os.walk(folder):
         for name in names:
@@ -27,59 +27,38 @@ def collect_transcript_files(folder):
     return files
 
 
-def group_class_files(file_paths):
-    """Group class files by their base name and order by part number.
-    
-    Parses filenames to extract class name, class number, and part number.
-    Groups files that belong to the same class together, sorted by part number
-    for proper sequential merging.
-    
-    Filename format expected: "ClassName_ClassNumber-PartNumber.extension"
-    Example: "Full_Stack_Python_1-01.txt" groups under "Full_Stack_Python_1"
-    
-    Args:
-        file_paths (list[str]): List of file paths to group and organize
-    
-    Returns:
-        dict: Dictionary mapping class keys to list of (part_number, path) tuples,
-              sorted by part number in ascending order
-    """
+def group_class_files(file_paths: list):
+    """Group class files by base name and sort by part number for sequential merging."""
     grouped = {}
     for path in file_paths:
         stem = os.path.splitext(os.path.basename(path))[0]
+        
         match = CLASS_PART_REGEX.match(stem)
         if match:
+            # Separate the previous match into groups
             base_name = match.group(1)
-            class_number = match.group(2)
+            class_number = int(match.group(2))
             part_number = int(match.group(3))
             class_key = f"{base_name}_{class_number}"
         else:
             class_key = stem
             part_number = 1
 
-        grouped.setdefault(class_key, []).append((part_number, path))
-
+        # Validate if the key is present and then it's added into the group dict
+        # to group the same classes
+        if class_key not in grouped:
+            grouped[class_key] = []
+        grouped[class_key].append((part_number, path))
+    
+    # sort the dictionary to order asc
     for class_key, parts in grouped.items():
         parts.sort(key=lambda item: item[0])
         grouped[class_key] = parts
-
+    
     return grouped
 
-
 def merge_parts(part_entries):
-    """Merge multiple part files into a single concatenated text.
-    
-    Reads all part files in order (already sorted by part_entries),
-    extracts the text content, and concatenates them with newline separators.
-    Skips empty parts and filters out encoding errors.
-    
-    Args:
-        part_entries (list[tuple]): List of (part_number, file_path) tuples,
-                                    must be pre-sorted by part number
-    
-    Returns:
-        str: Concatenated text from all parts, with empty lines trimmed
-    """
+    """Merge part files into single text; skip empty parts and handle encoding errors."""
     texts = []
     for _, path in part_entries:
         with open(path, "r", encoding="utf-8", errors="ignore") as f:

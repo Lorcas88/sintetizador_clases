@@ -1,35 +1,43 @@
+"""Batch organization and processing for multiple transcripts."""
+import os
 
 from cleaning_functions import clean_transcript
 from file_functions import merge_parts
-from functions import (
+from prompting import build_batch_prompt
+from splitting import (
     MAX_TOTAL_TOKENS_PER_REQUEST,
     OUTPUT_TOKEN_BUDGET_PER_CLASS,
-    build_batch_prompt,
-    count_tokens,
     split_transcript_for_limit,
 )
+from token_utils import count_tokens
 
-def build_class_items(client, model_name, grouped, clean_dir):
-    """Merge, clean, and token-split grouped transcripts into "class items".
+OUTPUT_FOLDER = "notebooklm_output"
 
-    Each returned item has: title, text, output_path. A class may expand into
-    multiple items if it must be split to fit token limits.
-    """
+def build_class_items(client, model_name, grouped, merge_dir, clean_dir):
+    """Merge, clean, and token-split grouped transcripts; expand items if needed for limits."""
     class_items = []
+    # Iterates through the dictionary
     for class_key, part_entries in grouped.items():
+        # Merged the classes that contains more than one file and turn it into a one file
         merged_text = merge_parts(part_entries)
         if not merged_text:
             continue
 
+        merged_file = os.path.join(merge_dir, f"{class_key}.txt")
+        with open(merged_file, "w", encoding="utf-8") as f:
+            f.write(merged_text + "\n")
+        
         cleaned = clean_transcript(merged_text)
         if not cleaned:
             continue
-
+        
         clean_path = os.path.join(clean_dir, f"{class_key}.clean.txt")
         with open(clean_path, "w", encoding="utf-8") as f:
             f.write(cleaned + "\n")
-
+        
         parts = split_transcript_for_limit(client, model_name, class_key, cleaned)
+        print(parts)
+        return
         if len(parts) == 1:
             class_items.append(
                 {
@@ -55,10 +63,7 @@ def build_class_items(client, model_name, grouped, clean_dir):
 
 
 def build_batches(client, model_name, class_items):
-    """Greedily pack class items into batches that fit the token budget.
-
-    Budget = input_tokens(prompt) + OUTPUT_TOKEN_BUDGET_PER_CLASS * n_items.
-    """
+    """Greedily pack class items into batches respecting token budget constraints."""
     batches = []
     current = []
 
@@ -83,11 +88,7 @@ def build_batches(client, model_name, class_items):
 
 
 def write_batch_outputs(output_dir, batch, parsed, raw_response, batch_index):
-    """Write per-item Markdown files from a batch response.
-
-    If a section is missing/unparseable, write a `batch_fallback_XX.md` with the
-    raw API response for debugging.
-    """
+    """Write per-item Markdown files; fallback to batch_fallback_XX.md on parse errors."""
     if parsed:
         for item in batch:
             content = parsed.get(item["title"])
